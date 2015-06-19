@@ -15,24 +15,16 @@ activities <- read.csv("mets.csv")
 
 shinyServer(function(input, output, clientData, session) {
 
-
+    ### reactives
+    
+    # body mass index calculated from height and weight
     bmi <- reactive({
         round(input$weight_kg / (input$height_cm/100)^2, digits=1)
     })
     
-    output$bmi <- renderText({
-        bmi()
-    })
-    
-    output$EER <- renderText({
-        validate(need(input$goButton > 0, "Select your age, height, weight, and physical activity level to the left, then click \"Calculate Energy Needs\""),
-        need(isolate(input$age) >= 18, "At present, energy needs are available only  for adults 18 years or older"))
-
-       paste("Estimated Energy Requirement:", 
-             round(EER_range()$propLower, digits = 0),
-             " - ", round(EER_range()$propUpper, digits = 0))
-    })
-    
+    # calculate the estimated energy needs from the reconstructed non-linear least
+    # squares model (see setup.R) using error propagation  and monte carlo simulation
+    # (propagate package)
     EER_range <- reactive({
         input$goButton
         # extract the model for the sex and bmi category
@@ -54,6 +46,10 @@ shinyServer(function(input, output, clientData, session) {
         })
     })
     
+    ### observers
+    
+    # keep the height input with the non-selected units up to date with the 
+    # current input
     observe({
         if(input$ht_units=="ftin") {
             matches <- strsplit(input$height_ftin, "[^[:digit:]\\.]")[[1]]
@@ -76,6 +72,7 @@ shinyServer(function(input, output, clientData, session) {
         }
     })
     
+    # keep the input for the non-selected units (hidden) in sync with the current input
     observe({
         if(input$wt_units == "lb") 
             updateNumericInput(session, "weight_kg", 
@@ -85,6 +82,30 @@ shinyServer(function(input, output, clientData, session) {
                                value=round(input$weight_kg * 2.2, digits = 1))
     })
     
+    # show and hide PAL help screen using hidden numeric input
+    observe({
+        input$PAL_help
+        updateNumericInput(session, "PAL_help_visible", value = 1)
+    })
+    observe({
+        input$PAL_calculate
+        updateNumericInput(session, "PAL_help_visible", value = 0)
+    })
+    
+    ### renderers
+    
+    #text version of estimated energy range
+    output$EER <- renderText({
+        validate(need(input$goButton > 0, "Select your age, height, weight, and physical activity level to the left, then click \"Calculate Energy Needs\""),
+        need(isolate(input$age) >= 18, "At present, energy needs are available only  for adults 18 years or older"))
+
+       paste("Estimated Energy Requirement:", 
+             round(EER_range()$propLower, digits = 0),
+             " - ", round(EER_range()$propUpper, digits = 0))
+    })
+ 
+    # renders rCharts polychart of the estimated EER range compared to nearby
+    # observed values from the IOM data set
     output$chart <- renderChart2({
         validate(need(input$goButton > 0, ""),
                  need(isolate(input$age) >= 18, ""))
@@ -111,16 +132,8 @@ shinyServer(function(input, output, clientData, session) {
         p
     }) 
     
-    observe({
-        input$PAL_help
-        updateNumericInput(session, "PAL_help_visible", value = 1)
-    })
-    observe({
-        input$PAL_calculate
-        updateNumericInput(session, "PAL_help_visible", value = 0)
-        #TODO: update radio button selection
-    })
-    
+    # dynamically creates a numeric input for each activity in the activities table
+    # for the PAL helper panel
     output$activityList <- renderUI({
         act <- split(as.character(activities$Activity), cut2(1:nrow(activities), g=3))
         div(class = "sidebyside", 
@@ -135,6 +148,8 @@ shinyServer(function(input, output, clientData, session) {
             
     })
     
+    # Writes description of physical activity level calculation to the bottom of the
+    # PAL help panel, also updates the PAL_cat radio buttons based on the results
     output$PAL_calc <- renderUI({
         
         # MET inflation factor formula from IOM energy manual
@@ -193,6 +208,8 @@ shinyServer(function(input, output, clientData, session) {
     
 
 })
+
+# misc helper funcs
 
 # Function that filters data to show just points similar to the user,
 # but takes into account sparsity of data to avoid overzooming 

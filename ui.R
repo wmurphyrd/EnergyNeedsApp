@@ -13,11 +13,13 @@ shinyUI(fluidPage(
             .sidebyside label {width: auto; font-size:12px;}
             .sidebyside input {display: inline-block; width: 70px; float: right;}
             .sidebyside .col-sm-4 {min-width: 300px;}
-            .lowerunits {margin-top:25px;}"))),    
+            .lowerunits {margin-top:25px;}
+            .floaterPanel {position: fixed; top: 75px; z-index:999;
+                            width: 910px; margin: 0 auto;}"))),    
 
   # Application title
   titlePanel("Accurate Estimates of Calorie Needs"),
-
+  p("Introduction and instructions"),
   # Sidebar with a slider input for number of bins
   sidebarLayout(
     sidebarPanel(
@@ -49,8 +51,9 @@ shinyUI(fluidPage(
       actionButton("goButton", "Calculate Energy Needs"),
       conditionalPanel("input.PAL_help_visible>0",
                        div(
-                           h3("Determine your physical activity level"),
-                           p("The physical activity levels are defined as..."),
+                           div(class="panel-heading",
+                           h3(class="panel-title", "Determine your physical activity level")),
+                           div(class="panel-body", p("The physical activity levels are defined as..."),
                            p("To calculate your physical activity level, enter the total 
                               number of hours your spend", strong("per week"), 
                              "doing the following activities:"),
@@ -58,15 +61,13 @@ shinyUI(fluidPage(
                            uiOutput("activityList"),
                            #textOutput("PAL_calc"),
                            uiOutput("PAL_calc"),
-                           actionButton("PAL_calculate", "Save and Continue"),
-                           style="position: fixed; top: 75px; margin:0 auto; 
-                             z-index:999;", class="well"))
+                           actionButton("PAL_calculate", "Save and Continue")),
+                           class="panel panel-primary floaterPanel"))
     ),
 
     # Show a plot of the generated distribution
     mainPanel(
-      h2("Body Mass Index"),
-      textOutput("bmi"),
+      h3("Estimated Energy Needs"),
       textOutput("EER"),
       showOutput("chart", "polycharts")
     )
