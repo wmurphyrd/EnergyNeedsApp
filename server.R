@@ -140,14 +140,13 @@ shinyServer(function(input, output, clientData, session) {
     
     #text version of estimated energy range
     output$EER <- renderUI({
-        validate(need(input$goButton > 0, "Your estimated energy needs will appear after clicking the \"Calculate Energy Needs\" button to the left."),
-                 need(isolate(input$age) >= 18, "At present, energy needs are available only  for adults 18 years or older"))
+        validate(check_validity(input))
         
         div(p("Your energy needs are estimated to be between ", 
               span(paste(prettyNum(EER_range()$propLower, big.mark=",", digits = 0),
               "and", prettyNum(EER_range()$propUpper, big.mark=",", digits = 0)), 
               class="emphasizeText"),
-              " Calories per day"),p("The estimated range will include the actual energy
+              " Calories per day. The estimated range will include the actual energy
         needs of 95% of people, but 5% of people will have individual energy needs higher
         or lower than the estimate."), p("You can compare your estimate with the 
         laboratory-measured energy needs of people similar to you using the chart below."),
@@ -157,7 +156,9 @@ shinyServer(function(input, output, clientData, session) {
     # this caption for the chart is setup to be rendered so it doesn't appear 
     # until the chart does
     output$chart_caption <- renderText({
-        validate(need(input$goButton > 0, ""))
+#         validate(need(input$goButton > 0, ""),
+#                  need())
+        validate(check_validity(input, quiet = TRUE))
         "Your estimated energy needs range is highlighted 
         in green, and the points on the plot represent measured energy needs of 
         people of the same sex with similar physical activity level, age, and 
@@ -167,8 +168,7 @@ shinyServer(function(input, output, clientData, session) {
     # renders rCharts polychart of the estimated EER range compared to nearby
     # observed values from the IOM data set
     output$chart <- renderChart2({
-        validate(need(input$goButton > 0, ""),
-                 need(isolate(input$age) >= 18, ""))
+        validate(check_validity(input, quiet=TRUE))
         pal_current <- isolate(PAL_value())
         # if the user didn't use the PAL help panel, set the pal value to equal
         # the average for the selected PAL category (averages from IOM report)
@@ -216,7 +216,7 @@ shinyServer(function(input, output, clientData, session) {
         p$layer(TEE ~ BMI, data=data.frame(BMI=rep(isolate(bmi()),2),
                                                    TEE= c(EER_range()$propLower - 100,
                                                           EER_range()$propUpper + 100)),
-                type="point", opacity=list(const=0.00001), color=list(cost="white"), 
+                type="point", opacity=list(const=0.00001), color=list(const="white"), 
                 tooltip= "#! function(x) {return(NULL)} !#")
         # plot the source data as points
         p$layer(TEE ~ BMI, data=pData, type="point", size=list(var="PAL"),
@@ -257,7 +257,8 @@ shinyServer(function(input, output, clientData, session) {
     # Writes description of physical activity level calculation to the bottom of the
     # PAL help panel, also updates the PAL_cat radio buttons based on the results
     output$PAL_calc <- renderUI({
-        validate(need(!is.na(activity_METs()), ""))
+        validate(need(!is.na(activity_METs()), ""),
+                 need(!is.na(PAL_value()), "Calcultion error. Close this panel and verify height, weight, and age are correct."))
         # Convert calculated PAL into factor using switch and cut2 for 
         # convenience (but cut2 only works right if at least one value 
         # for each category is present so some filler data is added and 
@@ -306,3 +307,23 @@ zoomPlot <- function(data) {
     }
     data
 } 
+
+check_validity <- function(input, quiet=FALSE) {
+    ret <- ""
+    isolate({
+    # These error messages can act cumulatively
+        if(is.na(as.numeric(input$age))) ret <- paste(ret, 
+            "Please enter a valid number for age in years.") else
+            if(input$age < 18) ret <- paste(ret, 
+                "Currently only energy needs for adults over 18 years of age are available.")
+        if(is.na(as.numeric(input$weight_kg))) ret <- paste(ret, 
+            "Please enter a valid number for weight.")
+        if(is.na(as.numeric(input$height_cm))) ret <- paste(ret, 
+            "Please enter a valid number for height.")
+    })    
+    # This error message will override any others
+    if(input$goButton < 1) ret <-
+        "Your estimated energy needs will appear after clicking the \"Calculate Energy Needs\" button to the left."
+
+    ifelse(ret == "", return(NULL), ifelse(quiet, FALSE, ret))
+}
