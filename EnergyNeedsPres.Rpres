@@ -1,0 +1,120 @@
+Estimating Individual Energy Needs
+========================================================
+author: William Murphy, MS RDN
+date: June 21st, 2015
+font-family: serif
+
+Improving the accuracy of daily Calorie requirement estimations with
+statistical computing
+
+Background
+========================================================
+
+* Accurate estimates of dietary energy needs are important to medical
+professionals and the general population
+* Estimating equations like the example below from the 2005 Dietary Refernce Intakes are often used
+
+$$ EER = 662 – (9.53 \times age) + PA \times (15.91 \times weight
++ 539.6 \times height) $$
+
+* The results are frequently misinterpreted as an estimate of an individual's energy needs
+* The result is actually an estimate the **mean** energy needs for individuals of
+    the same age, height, weight, and physical activity level
+* For an individual, uncertainty in the estimate should be expressed 
+    with a prediction interval
+
+
+Model Recreation
+========================================================
+
+* Accurate calculation of prediction intervals requires a recreation of the original model
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE}
+#prepare the data
+   library(xlsx); library(Hmisc);  library(magrittr); library(dplyr)
+    furl <- "http://iom.edu/~/media/Files/Activity%20Files/Nutrition/DRIs/New%20Material/10_DLW_Database.xls"
+    fname <- "dlw_data.xls"
+    if(!file.exists("dlw_data.xls")) download.file(furl, destfile = fname,
+                                                   mode= "wb")
+    
+    cindex <- c(5, 6, 8, 9, 11, 12, 14, 19,24)
+    cnames <- c("rep", "metabolism",  "sex", "age", "ht", "wt", "BMR", "TEE", "PAL")
+    cclasses <- c(rep("numeric",2), "character", rep("numeric", 6))
+    adultNW <- read.xlsx(fname, sheetName = "adults", 
+                         colIndex = cindex, colClasses = cclasses)
+    names(adultNW) <- cnames
+    adultNW$BMIcat <- "normal"
+    adultOB <- read.xlsx(fname, sheetName = "obese adults", 
+                         colIndex = cindex, colClasses = cclasses)
+    names(adultOB) <- cnames
+    adultOB$BMIcat <- "overweight"
+    adults <- rbind(adultNW, adultOB)
+    rm(adultNW, adultOB)
+    
+    adults %<>% mutate(BMIcat = as.factor(BMIcat), BMI = wt / ht^2) %>% 
+        #exclude measuremens that were repeats on a single individual
+        #exclude cases with metabolic stress / clinical condition
+        filter(is.na(rep) | rep < 2, is.na(metabolism) | metabolism < 4) %>% 
+        dplyr::select(-rep, -metabolism) %>%
+        #exclude 2 discovered outlier cases that were also excluded by IOM
+        filter(!(sex == "m" & ht== 1.79 & age == 54))
+        
+        
+    levels(adults$sex) <- list(f = c("F", "f"), m = c("M", "m"))
+    
+    # apply physical activity categories using IOM groupings
+    # and exclude PAL < 1.0 or > 2.5 as per IOM
+    adults$PALcat <- cut2(adults$PAL, c(1, 1.4, 1.6, 1.9, 2.5))
+    levels(adults$PALcat) <- c(NA, "Sedentary", "Low_Active", "Active", "Very_Active", NA)
+    
+    adults %<>% filter(complete.cases(.))
+    
+    # create dummy variables for PAL categories
+    adults <- cbind(adults, model.matrix(~PALcat-1, data=adults))
+    IOM_data <- filter(adults, sex=="m", BMIcat=="normal")
+    
+    original_coef = list(Bage = -9.53, Bwt = 15.91, Bht = 539.6,
+                    BPALla = 0.11, BPALa = 0.25, BPALva = 0.48, Bint=662)
+```
+
+```{r, message=FALSE, warning=FALSE}
+library(knitr)
+mod <- nls(TEE ~ Bint + Bage * age + (1 + BPALla * PALcatLow_Active + BPALa * PALcatActive + BPALva * PALcatVery_Active) * (Bht * ht + Bwt * wt), data = IOM_data, start = original_coef)
+approx_r_squared <- 1 - mod$m$deviance() / sum((IOM_data$TEE - mean(IOM_data$TEE))^2)
+```
+
+```{r, echo=FALSE}
+kable(data.frame(rbind(t(original_coef), t(round(coef(mod), 2))), r.squared = c(0.75, round(approx_r_squared, 2)), row.names=c("Original", "Recreated")))
+```
+
+<small>Data retrieval and processing code can be viewed in the source for this slide</small>
+
+NLS Prediction Intervals
+========================================================
+
+* The [propagate R package](http://cran.r-project.org/web/packages/propagate/index.html) implements a first and second order Taylor expansion method for error propagation into NLS prediction intervals
+
+
+```{r, message=FALSE, warning=FALSE, results='hide', cache=TRUE}
+library(propagate)
+nd <- data.frame(age = 32, PALcatLow_Active = 0, PALcatActive = 1, PALcatVery_Active = 0, ht = 1.8, wt = 81.8)
+p <- predictNLS(mod, nd, interval="prediction")
+```
+
+```{r, echo=FALSE}
+kable(data.frame(p$summary[c(2, 4:6)], check.names = FALSE))
+```
+
+The Energy Needs Shiny App
+========================================================
+
+* The [Energy Needs Shiny App](https://wmurphyrd.shinyapps.io/EnergyNeeds) provides a web
+user interface to the model and prediction function
+* The app includes recreated prediction models for adult men and women of normal or 
+overweight status from the 2005 Dietary Reference Intakes
+* Indviduals and medical professionals can use the application to obtain accurate estimates 
+of energy requirements
+* The app provides a calculator to help users select a physical activity level based on the reference activities and formulas published in the 2005 Dietary Reference Intakes
+* The app helps users evaluate their prediction interval by plotting it against the measured energy needs of individuals with similar characteristics in the source data
+
+
