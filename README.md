@@ -1,6 +1,6 @@
 # EnergyNeedsApp
-This is a Shiny applicaiton that uses the R statistical computing package to estimate the daily Calorie needs for individuals.
-The estimation works by recreated the non-linear least squares regression model used by the Institute of Medicine in the 2005
+This is a Shiny applicaiton that uses R to estimate the daily Calorie needs for individuals.
+The estimation works by recreating the non-linear least squares regression model used by the Institute of Medicine in the 2005
 Dietary Reference Intakes for energy using their original data. With the rebuilt model, the propagate R package is used to 
 create a 95% prediction interval for estimates using error propagation and Monte Carlo simulation. 
 
